@@ -1,0 +1,48 @@
+name: "ArgoCD Sync"
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'helm/**'
+      - 'manifests/**'
+      - 'argocd/**'
+
+jobs:
+  sync:
+    name: "ArgoCD Sync"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'v1.28.3'
+
+      - name: Setup ArgoCD CLI
+        run: |
+          curl -sSL -o argocd-linux-amd64 https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
+          sudo install -m 555 argocd-linux-amd64 /usr/local/bin/argocd
+          rm argocd-linux-amd64
+
+      - name: Login to ArgoCD
+        run: |
+          # In a real environment, you would use secrets for these values
+          ARGOCD_SERVER=localhost:8080
+          ARGOCD_PASSWORD=$(kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d)
+          
+          # Login to ArgoCD
+          argocd login $ARGOCD_SERVER --username admin --password $ARGOCD_PASSWORD --insecure
+        env:
+          KUBECONFIG: ${{ secrets.KUBECONFIG }}
+
+      - name: Sync ArgoCD Applications
+        run: |
+          # Sync all applications
+          argocd app sync myapp
+        env:
+          KUBECONFIG: ${{ secrets.KUBECONFIG }}
